@@ -3,7 +3,10 @@
   "files.associations": {
     "system_error": "c",
     "fingerprint.h": "c",
-    "gpio.h": "c"
+    "gpio.h": "c",
+    "mqtt_client.h": "c"
   },
-  "idf.adapterTargetName": "esp32"
+  "idf.adapterTargetName": "esp32",
+  "idf.flashType": "UART",
+  "idf.port": "/dev/ttyUSB0"
 }
