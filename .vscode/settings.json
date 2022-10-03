@@ -1,0 +1,9 @@
+{
+  "C_Cpp.intelliSenseEngine": "Tag Parser",
+  "files.associations": {
+    "system_error": "c",
+    "fingerprint.h": "c",
+    "gpio.h": "c"
+  },
+  "idf.adapterTargetName": "esp32"
+}
