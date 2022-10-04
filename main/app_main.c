@@ -32,14 +32,14 @@
 
 #include "DHT22.h"
 
-#define BROKER       "test.mosquitto.org"   
-#define TOPIC_DOOR  "Prj/Door"
-#define TOPIC_FLOOR1  "Prj/Floor1"
-#define TOPIC_FLOOR2  "Prj/Floor2"
-#define TOPIC_FLOOR3  "Prj/Floor3"
-#define TOPIC_ACCOUNT  "Prj/Account"
-#define TOPIC_PASSWORD  "Prj/Password"
-#define TOPIC_FIREALARM "Prj/Fire"
+#define BROKER              "mqtt://test.mosquitto.org:1883"   
+#define TOPIC_DOOR          "Prj/Door"
+#define TOPIC_FLOOR1        "Prj/Floor1"
+#define TOPIC_FLOOR2        "Prj/Floor2"
+#define TOPIC_FLOOR3        "Prj/Floor3"
+#define TOPIC_ACCOUNT       "Prj/Account"
+#define TOPIC_PASSWORD      "Prj/Password"
+#define TOPIC_FIREALARM     "Prj/Fire"
 
 #define DOOR_CMD_LIGHT               '1'
 #define DOOR_CMD_LIGHT_ON            '1'
@@ -60,27 +60,35 @@ esp_mqtt_client_handle_t client;
 static const char *TAG = "Graduation Floor";
 static QueueHandle_t DHT_Temp_queue = NULL,
                      DHT_Hum_queue = NULL,
-                     Gas_value = NULL;
+                     Gas_value_queue = NULL;
 
+static void my_App_Init(void)
+{
+    DHT_Temp_queue = xQueueCreate(10, sizeof(float));
+
+    DHT_Hum_queue = xQueueCreate(10, sizeof(float));
+
+    Gas_value_queue = xQueueCreate(10, sizeof(float));
+}
 
 static void get_DHT_Value(void* arg)
 {
-    uint32_t io_num = 0;
+    float io_num = 0;
     for(;;) {
-        // if(xQueueReceive(gpio_evt_queue, &io_num, portMAX_DELAY)) {
-            io_num++;
-            xQueueSend(DHT_Temp_queue, &io_num, 1000/portTICK_PERIOD_MS);
-            vTaskDelay(1000);
-        // }
+        io_num++;
+        xQueueSend(DHT_Temp_queue, &io_num, 1000/portTICK_PERIOD_MS);
     }
 }
 
 static void send_DHT_Value(void* arg)
 {
-    uint32_t io_num = 0;
+    char buffer[10] = {0};
+    float io_num = 0;
     for(;;) {
          if(xQueueReceive(DHT_Temp_queue, &io_num, portMAX_DELAY)) {
-            esp_mqtt_client_publish(client, TOPIC_FLOOR1, &io_num, 1, 1, 0);
+            memset(buffer, 0, sizeof(buffer));
+            sprintf(buffer, "%f", io_num);
+            esp_mqtt_client_publish(client, TOPIC_FLOOR1, &io_num, 5, 1, 0);
          }
     }
 }
@@ -112,6 +120,12 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
         printf("TOPIC=%.*s\r\n", event->topic_len, event->topic);
         printf("DATA=%.*s\r\n", event->data_len, event->data);
         break;
+    
+    case MQTT_EVENT_PUBLISHED:
+        ESP_LOGI(TAG, "published ok");
+        printf("TOPIC=%.*s\r\n", event->topic_len, event->topic);
+        printf("DATA=%.*s\r\n", event->data_len, event->data);
+        break;
     default:
         ESP_LOGI(TAG, "Other event id:%d", event->event_id);
         break;
@@ -122,6 +136,7 @@ static void mqtt_app_start(void)
 {
     esp_mqtt_client_config_t mqtt_cfg = {
         .uri = BROKER,
+        .keepalive = 60,
     };
 
     client = esp_mqtt_client_init(&mqtt_cfg);
@@ -143,7 +158,10 @@ void app_main(void)
      */
     ESP_ERROR_CHECK(example_connect());
 
+    char *io_num = "hello";
     mqtt_app_start();
-    xTaskCreate(get_DHT_Value, "gpio_task_example", 2048, NULL, configMAX_PRIORITIES-1, NULL);
-    xTaskCreate(send_DHT_Value, "gpio_task_example", 2048, NULL, configMAX_PRIORITIES, NULL);
+    esp_mqtt_client_publish(client, TOPIC_FLOOR1, io_num, 1, 1, 0);
+    //my_App_Init();
+    //xTaskCreate(get_DHT_Value, "gpio_task_example", 2048, NULL, configMAX_PRIORITIES-1, NULL);
+    //xTaskCreate(send_DHT_Value, "gpio_task_example", 2048, NULL, configMAX_PRIORITIES, NULL);
 }
