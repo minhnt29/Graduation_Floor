@@ -64,32 +64,30 @@ static QueueHandle_t DHT_Temp_queue = NULL,
 
 static void my_App_Init(void)
 {
-    DHT_Temp_queue = xQueueCreate(10, sizeof(float));
+    DHT_Temp_queue = xQueueCreate(10, sizeof(int ));
 
-    DHT_Hum_queue = xQueueCreate(10, sizeof(float));
+    DHT_Hum_queue = xQueueCreate(10, sizeof(int));
 
-    Gas_value_queue = xQueueCreate(10, sizeof(float));
+    Gas_value_queue = xQueueCreate(10, sizeof(int));
 }
 
 static void get_DHT_Value(void* arg)
 {
-    float io_num = 0;
+    int data_packet = 0;
     for(;;) {
-        io_num++;
-        xQueueSend(DHT_Temp_queue, &io_num, 1000/portTICK_PERIOD_MS);
+        ESP_LOGI(TAG, "%d", data_packet);
+        data_packet++;
+        xQueueSend(DHT_Temp_queue, &data_packet, 1000/portTICK_PERIOD_MS);
     }
 }
 
 static void send_DHT_Value(void* arg)
 {
-    char buffer[10] = {0};
-    float io_num = 0;
+    int data_packet = 0;
     for(;;) {
-         if(xQueueReceive(DHT_Temp_queue, &io_num, portMAX_DELAY)) {
-            memset(buffer, 0, sizeof(buffer));
-            sprintf(buffer, "%f", io_num);
-            esp_mqtt_client_publish(client, TOPIC_FLOOR1, &io_num, 5, 1, 0);
-         }
+        if(xQueueReceive(DHT_Temp_queue, &data_packet, portMAX_DELAY)) {
+           esp_mqtt_client_publish(client, TOPIC_FLOOR1, &data_packet, sizeof(int), 1, 0);
+        }
     }
 }
 /*
@@ -160,8 +158,8 @@ void app_main(void)
 
     char *io_num = "hello";
     mqtt_app_start();
-    esp_mqtt_client_publish(client, TOPIC_FLOOR1, io_num, 1, 1, 0);
-    //my_App_Init();
-    //xTaskCreate(get_DHT_Value, "gpio_task_example", 2048, NULL, configMAX_PRIORITIES-1, NULL);
-    //xTaskCreate(send_DHT_Value, "gpio_task_example", 2048, NULL, configMAX_PRIORITIES, NULL);
+    esp_mqtt_client_publish(client, TOPIC_FLOOR1, io_num, strlen(io_num), 1, 0);
+    my_App_Init();
+    xTaskCreate(get_DHT_Value, "gpio_task_example", 2048, NULL, configMAX_PRIORITIES-1, NULL);
+    xTaskCreate(send_DHT_Value, "gpio_task_example", 2048, NULL, configMAX_PRIORITIES, NULL);
 }
