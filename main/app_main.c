@@ -52,8 +52,13 @@
 #define DOOR_CMD_DOOR_ADDACCOUNT     '1'
 
 #define FLOOR1_CMD_LIGHT        '4'
-#define FLOOR2_CMD_LIGHT_ON     '1'
-#define FLOOR2_CMD_LIGHT_OFF    '0'
+#define FLOOR1_CMD_LIGHT_ON     '1'
+#define FLOOR1_CMD_LIGHT_OFF    '0'
+#define FLOOR1_CMD_TEMP         '5'
+#define FLOOR1_CMD_HUMI         '6'
+
+
+#define DHT22_PINOUT  4
 
 esp_mqtt_client_handle_t client;
 
@@ -64,29 +69,48 @@ static QueueHandle_t DHT_Temp_queue = NULL,
 
 static void my_App_Init(void)
 {
-    DHT_Temp_queue = xQueueCreate(10, sizeof(int ));
+    DHT_Temp_queue = xQueueCreate(10, sizeof(float));
 
-    DHT_Hum_queue = xQueueCreate(10, sizeof(int));
+    DHT_Hum_queue = xQueueCreate(10, sizeof(float));
 
-    Gas_value_queue = xQueueCreate(10, sizeof(int));
+    Gas_value_queue = xQueueCreate(10, sizeof(float));
+
+    setDHTgpio(DHT22_PINOUT);
 }
 
 static void get_DHT_Value(void* arg)
 {
-    int data_packet = 0;
+    float humidity = 0,
+          temp = 0;
+
     for(;;) {
-        ESP_LOGI(TAG, "%d", data_packet);
-        data_packet++;
-        xQueueSend(DHT_Temp_queue, &data_packet, 1000/portTICK_PERIOD_MS);
+        int rc = readDHT();
+        errorHandler(rc);
+        humidity = getHumidity();
+        temp = getTemperature();
+
+        xQueueSend(DHT_Temp_queue, &temp, 1000/portTICK_PERIOD_MS);
+        xQueueSend(DHT_Hum_queue, &humidity, 1000/portTICK_PERIOD_MS);
+        vTaskDelay(500);
     }
 }
 
 static void send_DHT_Value(void* arg)
 {
-    int data_packet = 0;
+    float humidity = 0,
+          temp = 0;
+    char buffer_rcv[5];
     for(;;) {
-        if(xQueueReceive(DHT_Temp_queue, &data_packet, portMAX_DELAY)) {
-           esp_mqtt_client_publish(client, TOPIC_FLOOR1, &data_packet, sizeof(int), 1, 0);
+        if(xQueueReceive(DHT_Temp_queue, &temp, portMAX_DELAY)) {
+            ESP_LOGI(TAG, "Received data temp = %.1f", temp);
+            sprintf(buffer_rcv, "%.1f", temp);
+            esp_mqtt_client_publish(client, TOPIC_FLOOR1, buffer_rcv, sizeof(buffer_rcv), 1, 0);
+        }
+
+        if(xQueueReceive(DHT_Hum_queue, &humidity, portMAX_DELAY)) {
+            ESP_LOGI(TAG, "Received data humidity = %.1f", humidity);
+            sprintf(buffer_rcv, "%.1f", humidity);
+            esp_mqtt_client_publish(client, TOPIC_FLOOR1, buffer_rcv, sizeof(buffer_rcv), 1, 0);
         }
     }
 }
@@ -121,8 +145,6 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
     
     case MQTT_EVENT_PUBLISHED:
         ESP_LOGI(TAG, "published ok");
-        printf("TOPIC=%.*s\r\n", event->topic_len, event->topic);
-        printf("DATA=%.*s\r\n", event->data_len, event->data);
         break;
     default:
         ESP_LOGI(TAG, "Other event id:%d", event->event_id);
@@ -156,9 +178,7 @@ void app_main(void)
      */
     ESP_ERROR_CHECK(example_connect());
 
-    char *io_num = "hello";
     mqtt_app_start();
-    esp_mqtt_client_publish(client, TOPIC_FLOOR1, io_num, strlen(io_num), 1, 0);
     my_App_Init();
     xTaskCreate(get_DHT_Value, "gpio_task_example", 2048, NULL, configMAX_PRIORITIES-1, NULL);
     xTaskCreate(send_DHT_Value, "gpio_task_example", 2048, NULL, configMAX_PRIORITIES, NULL);
