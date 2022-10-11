@@ -16,6 +16,7 @@
 #include "nvs_flash.h"
 #include "esp_event.h"
 #include "esp_netif.h"
+#include "driver/gpio.h"
 #include "protocol_examples_common.h"
 
 #include "freertos/FreeRTOS.h"
@@ -31,6 +32,7 @@
 #include "mqtt_client.h"
 
 #include "DHT22.h"
+//#include "MQ2.h"
 
 #define BROKER              "mqtt://test.mosquitto.org:1883"   
 #define TOPIC_DOOR          "Prj/Door"
@@ -47,9 +49,6 @@
 #define DOOR_CMD_DOOR                '2'
 #define DOOR_CMD_DOOR_OPEN           '1'
 #define DOOR_CMD_DOOR_CLOSE          '0'
-#define DOOR_CMD_DOOR_KEYPAD         '3'
-#define DOOR_CMD_DOOR_CHANGEPASSWORD '0'
-#define DOOR_CMD_DOOR_ADDACCOUNT     '1'
 
 #define FLOOR1_CMD_LIGHT        '4'
 #define FLOOR1_CMD_LIGHT_ON     '1'
@@ -78,6 +77,17 @@ static void my_App_Init(void)
     setDHTgpio(DHT22_PINOUT);
 }
 
+static void get_Gas_Value (void* arg)
+{
+
+    for(;;)
+    {
+        //@TODO
+        //get DHT Value
+        //push DHT Value to topic Fire alarm
+    }
+}
+
 static void get_DHT_Value(void* arg)
 {
     float humidity = 0,
@@ -103,13 +113,13 @@ static void send_DHT_Value(void* arg)
     for(;;) {
         if(xQueueReceive(DHT_Temp_queue, &temp, portMAX_DELAY)) {
             ESP_LOGI(TAG, "Received data temp = %.1f", temp);
-            sprintf(buffer_rcv, "%.1f", temp);
+            sprintf(buffer_rcv, "%c%.1f", FLOOR1_CMD_TEMP, temp);
             esp_mqtt_client_publish(client, TOPIC_FLOOR1, buffer_rcv, sizeof(buffer_rcv), 1, 0);
         }
 
         if(xQueueReceive(DHT_Hum_queue, &humidity, portMAX_DELAY)) {
             ESP_LOGI(TAG, "Received data humidity = %.1f", humidity);
-            sprintf(buffer_rcv, "%.1f", humidity);
+            sprintf(buffer_rcv, "%c%.1f", FLOOR1_CMD_HUMI, humidity);
             esp_mqtt_client_publish(client, TOPIC_FLOOR1, buffer_rcv, sizeof(buffer_rcv), 1, 0);
         }
     }
@@ -180,6 +190,7 @@ void app_main(void)
 
     mqtt_app_start();
     my_App_Init();
-    xTaskCreate(get_DHT_Value, "gpio_task_example", 2048, NULL, configMAX_PRIORITIES-1, NULL);
-    xTaskCreate(send_DHT_Value, "gpio_task_example", 2048, NULL, configMAX_PRIORITIES, NULL);
+    xTaskCreate(get_DHT_Value, "get DHT value", 2048, NULL, configMAX_PRIORITIES-1, NULL);
+    xTaskCreate(send_DHT_Value, "push DHT value", 2048, NULL, configMAX_PRIORITIES, NULL);
+    xTaskCreate(get_Gas_Value, "get and push Gas value", 2048, NULL, configMAX_PRIORITIES-1, NULL);
 }
