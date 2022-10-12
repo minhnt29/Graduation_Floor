@@ -1,13 +1,9 @@
-/* MQTT (over TCP) Example
+/* *********************************************************************************************************
+ *******************                    GRADUATION FLOOR 1                              ********************
+ **********************************************************************************************************/
 
-   This example code is in the Public Domain (or CC0 licensed, at your option.)
-
-   Unless required by applicable law or agreed to in writing, this
-   software is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
-   CONDITIONS OF ANY KIND, either express or implied.
-*/
-
-#include <stdio.h>
+//DHT22 - pin 4
+//GAS sensor MQ2  - pin 34
 #include <stdint.h>
 #include <stddef.h>
 #include <string.h>
@@ -32,7 +28,7 @@
 #include "mqtt_client.h"
 
 #include "DHT22.h"
-//#include "MQ2.h"
+#include "MQ2.h"
 
 #define BROKER              "mqtt://test.mosquitto.org:1883"   
 #define TOPIC_DOOR          "Prj/Door"
@@ -75,16 +71,23 @@ static void my_App_Init(void)
     Gas_value_queue = xQueueCreate(10, sizeof(float));
 
     setDHTgpio(DHT22_PINOUT);
+
+    mq2Init();
 }
 
 static void get_Gas_Value (void* arg)
 {
-
+    float percent_gas_concentration = 0.0;
+    char buffer_rcv[5];
     for(;;)
     {
-        //@TODO
         //get DHT Value
+        percent_gas_concentration = mq2GetValue();
         //push DHT Value to topic Fire alarm
+        sprintf(buffer_rcv, "%.2f", percent_gas_concentration);
+        esp_mqtt_client_publish(client, TOPIC_FIREALARM, buffer_rcv, sizeof(buffer_rcv), 1, 0);
+
+        vTaskDelay(pdTICKS_TO_MS(500));
     }
 }
 
@@ -192,5 +195,5 @@ void app_main(void)
     my_App_Init();
     xTaskCreate(get_DHT_Value, "get DHT value", 2048, NULL, configMAX_PRIORITIES-1, NULL);
     xTaskCreate(send_DHT_Value, "push DHT value", 2048, NULL, configMAX_PRIORITIES, NULL);
-    xTaskCreate(get_Gas_Value, "get and push Gas value", 2048, NULL, configMAX_PRIORITIES-1, NULL);
+    xTaskCreate(get_Gas_Value, "get and push Gas value", 2048, NULL, configMAX_PRIORITIES, NULL);
 }
